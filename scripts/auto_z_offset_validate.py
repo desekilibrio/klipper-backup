@@ -9,22 +9,18 @@ from urllib import request, parse
 
 MOONRAKER = "http://127.0.0.1:7125"
 
-
 def post_gcode(script_text, timeout=30):
     data = parse.urlencode({"script": script_text}).encode()
     req = request.Request(f"{MOONRAKER}/printer/gcode/script", data=data, method="POST")
     with request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode())
 
-
 def get_query(path, timeout=15):
     with request.urlopen(f"{MOONRAKER}{path}", timeout=timeout) as resp:
         return json.loads(resp.read().decode())
 
-
 def get_gcode_store(count=300):
     return get_query(f"/server/gcode_store?count={count}")
-
 
 def get_temps():
     data = get_query("/printer/objects/query?heater_bed&extruder")
@@ -37,7 +33,6 @@ def get_temps():
         "ext_temp": float(ext.get("temperature", 0)),
         "ext_target": float(ext.get("target", 0)),
     }
-
 
 def wait_for_bed(bed_target, tol=0.8, stable_s=15, timeout=1800):
     start = time.time()
@@ -59,7 +54,6 @@ def wait_for_bed(bed_target, tol=0.8, stable_s=15, timeout=1800):
         f"Timeout esperando cama estable. Bed={last['bed_temp']}/{bed_target}"
     )
 
-
 def wait_for_hotend(hotend_target, tol=0.8, stable_s=15, timeout=1800):
     start = time.time()
     reached_at = None
@@ -79,7 +73,6 @@ def wait_for_hotend(hotend_target, tol=0.8, stable_s=15, timeout=1800):
     raise RuntimeError(
         f"Timeout esperando hotend estable. Hotend={last['ext_temp']}/{hotend_target}"
     )
-
 
 def soak_bed(seconds):
     if seconds <= 0:
@@ -107,11 +100,7 @@ def send_and_capture_value(cmd, sleep_s=2.0, polls=25):
     for _ in range(polls):
         after = get_gcode_store(300)
         after_msgs = after.get("result", {}).get("gcode_store", [])
-        new_msgs = [
-            m.get("message", "")
-            for m in after_msgs
-            if m.get("message", "") not in before_texts
-        ]
+        new_msgs = [m.get("message", "") for m in after_msgs if m.get("message", "") not in before_texts]
 
         for text in reversed(new_msgs):
             m = re.search(r'bltouch:\s*z_offset:\s*([-+]?[0-9]*\.?[0-9]+)', text, re.IGNORECASE)
@@ -121,7 +110,6 @@ def send_and_capture_value(cmd, sleep_s=2.0, polls=25):
         time.sleep(0.8)
 
     raise RuntimeError(f"No se pudo capturar el resultado bltouch de: {cmd}")
-
 
 def run_measurement_set(runs, material=None, pause_between=2.0):
     values = []
@@ -136,7 +124,6 @@ def run_measurement_set(runs, material=None, pause_between=2.0):
         time.sleep(pause_between)
     return values, raw
 
-
 def summarize_all(values):
     return {
         "values": values,
@@ -148,10 +135,10 @@ def summarize_all(values):
         "stdev": statistics.pstdev(values) if len(values) > 1 else 0.0,
     }
 
-
 def summarize_trimmed(values):
     if len(values) < 2:
         raise RuntimeError("No hay suficientes muestras para descartar la primera")
+
     trimmed = values[1:]
     return {
         "used_values": trimmed,
@@ -164,30 +151,19 @@ def summarize_trimmed(values):
         "discarded_first": values[0],
     }
 
-
 def home_and_settle():
     post_gcode("G90")
     post_gcode("G28", timeout=120)
     time.sleep(3)
 
-def build_probe_cmd(material=None, apply=False, clear=False, bed=None, hotend=None):
+def build_probe_cmd(material=None, apply=False, clear=False):
     parts = ["PRTOUCH_PROBE_ZOFFSET"]
-
     if apply:
         parts.append("APPLY_Z_ADJUST=1")
-
     if clear:
         parts.append("CLEAR_NOZZLE=1")
-
     if material:
         parts.append(f"MATERIAL={material.upper()}")
-
-    if hotend is not None:
-        parts.append(f"HOT_MIN_TEMP={hotend}")
-
-    if bed is not None:
-        parts.append(f"BED_MAX_TEMP={bed}")
-
     return " ".join(parts)
 
 def main():
@@ -208,7 +184,6 @@ def main():
 
     try:
         post_gcode("M117 Auto Z Start")
-
         post_gcode(f"M140 S{args.bed}")
         post_gcode(f"M117 Bed {args.bed}C")
         wait_for_bed(args.bed)
@@ -237,7 +212,7 @@ def main():
                 "attempt": attempt,
                 "raw": raw,
                 **summary_all,
-                **summary_trim,
+                **summary_trim
             }
             results.append(result)
 
@@ -260,7 +235,7 @@ def main():
             sys.exit(2)
 
         post_gcode("PRTOUCH_ACCURACY SAMPLES=10 PROBE_SPEED=1", timeout=180)
-        post_gcode(build_probe_cmd(material=material, apply=True, clear=True, bed=args.bed, hotend=args.hotend), timeout=180)
+        post_gcode(build_probe_cmd(material=material, apply=True, clear=True), timeout=180)
         post_gcode("SAVE_CONFIG", timeout=60)
 
         print(json.dumps({"ok": True, "selected": passed, "attempts": results}, ensure_ascii=False))
@@ -273,7 +248,6 @@ def main():
             pass
         print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
