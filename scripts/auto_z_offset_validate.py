@@ -170,17 +170,25 @@ def home_and_settle():
     post_gcode("G28", timeout=120)
     time.sleep(3)
 
-
-def build_probe_cmd(material=None, apply=False, clear=False):
+def build_probe_cmd(material=None, apply=False, clear=False, bed=None, hotend=None):
     parts = ["PRTOUCH_PROBE_ZOFFSET"]
+
     if apply:
         parts.append("APPLY_Z_ADJUST=1")
+
     if clear:
         parts.append("CLEAR_NOZZLE=1")
+
     if material:
         parts.append(f"MATERIAL={material.upper()}")
-    return " ".join(parts)
 
+    if hotend is not None:
+        parts.append(f"HOT_MIN_TEMP={hotend}")
+
+    if bed is not None:
+        parts.append(f"BED_MAX_TEMP={bed}")
+
+    return " ".join(parts)
 
 def main():
     ap = argparse.ArgumentParser()
@@ -252,7 +260,7 @@ def main():
             sys.exit(2)
 
         post_gcode("PRTOUCH_ACCURACY SAMPLES=10 PROBE_SPEED=1", timeout=180)
-        post_gcode(build_probe_cmd(material=material, apply=True, clear=True), timeout=180)
+        post_gcode(build_probe_cmd(material=material, apply=True, clear=True, bed=args.bed, hotend=args.hotend), timeout=180)
         post_gcode("SAVE_CONFIG", timeout=60)
 
         print(json.dumps({"ok": True, "selected": passed, "attempts": results}, ensure_ascii=False))
