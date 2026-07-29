@@ -454,17 +454,23 @@ class PRTouchZOffsetWrapper:
             hot_min_temp = gcmd.get_float('HOT_MIN_TEMP', prof['hot_min_temp'])
             hot_max_temp = gcmd.get_float('HOT_MAX_TEMP', prof['hot_max_temp'])
             bed_max_temp = gcmd.get_float('BED_MAX_TEMP', prof['bed_max_temp'])
-            self.clear_nozzle(hot_min_temp, hot_max_temp, bed_max_temp,
-                            self.cfg.min_hold, self.cfg.max_hold)
+            self.clear_nozzle(
+                hot_min_temp, hot_max_temp, bed_max_temp,
+                self.cfg.min_hold, self.cfg.max_hold
+            )
 
         x = self.cfg.sensor_x + random.uniform(-self.cfg.random_offset, self.cfg.random_offset)
         y = self.cfg.sensor_y + random.uniform(-self.cfg.random_offset, self.cfg.random_offset)
         probe_x_offset, probe_y_offset = self.obj.probe.get_offsets()[:2]
         probe_x = x - probe_x_offset
         probe_y = y - probe_y_offset
+
         self.pnt_msg("Checking z-position of probe (%.2f, %.2f)" % (probe_x, probe_y))
         self._move([probe_x, probe_y, self.cfg.bed_max_err + 1.], self.cfg.g29_xy_speed)
-        probe_gcmd = self.obj.gcode.create_gcode_command("PROBE", "PROBE", {'SAMPLES': '2'})
+
+        probe_gcmd = self.obj.gcode.create_gcode_command(
+            "PROBE", "PROBE", {'SAMPLES': '2'}
+        )
         z_probe = probe.run_single_probe(self.obj.probe, probe_gcmd)
         self.pnt_msg('Probe at sensor: %.3f' % z_probe[2])
 
@@ -476,11 +482,15 @@ class PRTouchZOffsetWrapper:
 
         z_adjust = z_offset + start_z_offset
         self.pnt_msg('z_adjust: %.3f' % z_adjust)
-        if gcmd.get_int('APPLY_Z_ADJUST', 0) == 1:
-            self.obj.gcode.run_script_from_command('SET_GCODE_OFFSET Z_ADJUST=%f MOVE=1' % (z_adjust))
 
-        z_probe[2] = homing_origin[2] + z_adjust - start_z_offset
-        self.probe_calibrate_finalize(z_probe)
+        if gcmd.get_int('APPLY_Z_ADJUST', 0) == 1:
+            self.obj.gcode.run_script_from_command(
+                'SET_GCODE_OFFSET Z_ADJUST=%f MOVE=1' % (z_adjust,)
+            )
+
+        kin_pos = list(z_probe)
+        kin_pos[2] = homing_origin[2] + z_adjust - start_z_offset
+        self.probe_calibrate_finalize(kin_pos)
 
     cmd_PRTOUCH_ACCURACY_help = "Probe Z-height accuracy at sensoor position"
     def cmd_PRTOUCH_ACCURACY(self, gcmd):
