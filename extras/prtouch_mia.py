@@ -415,18 +415,32 @@ class PRTouchZOffsetWrapper:
             self.obj.hx711s.delay_s(0.005)
         return self.val.out_index, self.val.out_val_mm, True
 
-    def probe_calibrate_finalize(self, kin_pos):
+    def probe_calibrate_finalize(self, kin_pos, start_z_offset=0., persist=False):
         if kin_pos is None:
             return
-        z_offset = -kin_pos[2]
+        # kin_pos[2] is only the *variation* (nozzle contact height measured
+        # with the current z_offset). The new z_offset must be the current one
+        # minus that variation; upstream used -kin_pos[2], which is only right
+        # when the current z_offset is 0.
+        z_offset = start_z_offset - kin_pos[2]
+        self.pnt_msg('z_offset new=%.3f (start=%.3f, variation=%.3f)' % (z_offset, start_z_offset, kin_pos[2]))
         probe_name = self.cfg.probe_name
         gcode = self.obj.printer.lookup_object('gcode')
-        gcode.respond_info(
-            "%s: z_offset: %.3f\n"
-            "The SAVE_CONFIG command will update the printer config file\n"
-            "with the above and restart the printer." % (probe_name, z_offset))
-        configfile = self.obj.printer.lookup_object('configfile')
-        configfile.set(probe_name, 'z_offset', "%.3f" % (z_offset,))
+        if persist:
+            # Only ever write to the config when this call was explicitly
+            # asked to apply/persist (APPLY_Z_ADJUST=1). Previously this ran
+            # unconditionally on every PRTOUCH_PROBE_ZOFFSET call, including
+            # pure measurement/consistency-check calls, silently queuing a
+            # config change that a later, unrelated SAVE_CONFIG would commit.
+            gcode.respond_info(
+                "%s: z_offset: %.3f\n"
+                "The SAVE_CONFIG command will update the printer config file\n"
+                "with the above and restart the printer." % (probe_name, z_offset))
+            configfile = self.obj.printer.lookup_object('configfile')
+            configfile.set(probe_name, 'z_offset', "%.3f" % (z_offset,))
+        else:
+            gcode.respond_info(
+                "%s: z_offset: %.3f (measurement only, not saved)" % (probe_name, z_offset))
 
     cmd_NOZZLE_CLEAR_help = "Clear the nozzle on bed."
     def cmd_NOZZLE_CLEAR(self, gcmd):
@@ -481,15 +495,21 @@ class PRTouchZOffsetWrapper:
         self.pnt_msg('Calculated z_offset: %.3f' % z_offset)
 
         z_adjust = z_offset + start_z_offset
-        self.pnt_msg('z_adjust: %.3f' % z_adjust)
+        self.pnt_msg('z_adjust (informational, start + variation): %.3f' % z_adjust)
 
-        if gcmd.get_int('APPLY_Z_ADJUST', 0) == 1:
+        apply_now = gcmd.get_int('APPLY_Z_ADJUST', 0) == 1
+        if apply_now:
+            # The live correction is only the measured variation, relative to
+            # whatever offset is already in effect.
+            self.pnt_msg('applying live Z_ADJUST=%.3f' % z_offset)
             self.obj.gcode.run_script_from_command(
-                'SET_GCODE_OFFSET Z=%f MOVE=1' % (z_adjust,)
+                'SET_GCODE_OFFSET Z_ADJUST=%f MOVE=1' % (z_offset,)
             )
 
-        kin_pos = [z_probe[0], z_probe[1], homing_origin[2] + z_adjust - start_z_offset]
-        self.probe_calibrate_finalize(kin_pos)
+        # z_offset here is the raw measured variation; homing_origin[2]
+        # accounts for any live Z_ADJUST already in effect before this call.
+        kin_pos = [z_probe[0], z_probe[1], homing_origin[2] + z_offset]
+        self.probe_calibrate_finalize(kin_pos, start_z_offset, persist=apply_now)
 
     cmd_PRTOUCH_ACCURACY_help = "Probe Z-height accuracy at sensoor position"
     def cmd_PRTOUCH_ACCURACY(self, gcmd):
