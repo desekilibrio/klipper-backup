@@ -217,9 +217,16 @@ def main():
             sys.exit(2)
 
         post_gcode("PRTOUCH_ACCURACY SAMPLES=10 PROBE_SPEED=1", timeout=LONG_GCODE_TIMEOUT)
-        post_gcode(build_probe_cmd(material=material, apply=True, clear=True), timeout=LONG_GCODE_TIMEOUT)
+        final_cmd = build_probe_cmd(material=material, apply=True, clear=True)
+        applied_z_offset, applied_raw = send_and_capture_value(final_cmd)
         post_gcode("SAVE_CONFIG", timeout=120)
-        print(json.dumps({"ok": True, "selected": passed, "attempts": results}, ensure_ascii=False))
+        print(json.dumps({
+            "ok": True,
+            "selected": passed,
+            "attempts": results,
+            "applied_z_offset": applied_z_offset,
+            "applied_raw": applied_raw,
+        }, ensure_ascii=False))
 
     except Exception as e:
         try:

@@ -485,11 +485,10 @@ class PRTouchZOffsetWrapper:
 
         if gcmd.get_int('APPLY_Z_ADJUST', 0) == 1:
             self.obj.gcode.run_script_from_command(
-                'SET_GCODE_OFFSET Z_ADJUST=%f MOVE=1' % (z_adjust,)
+                'SET_GCODE_OFFSET Z=%f MOVE=1' % (z_adjust,)
             )
 
-        kin_pos = list(z_probe)
-        kin_pos[2] = homing_origin[2] + z_adjust - start_z_offset
+        kin_pos = [z_probe[0], z_probe[1], homing_origin[2] + z_adjust - start_z_offset]
         self.probe_calibrate_finalize(kin_pos)
 
     cmd_PRTOUCH_ACCURACY_help = "Probe Z-height accuracy at sensoor position"
