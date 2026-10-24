@@ -41,22 +41,6 @@ path = /home/desepi/fluidd-config
 primary_branch = master
 type = git_repo
 
-[update_manager octoapp]
-type = git_repo
-channel = beta
-primary_branch = release
-path = /home/desepi/octoapp
-origin = https://github.com/crysxd/OctoApp-Plugin.git
-env = /home/desepi/octoapp-env/bin/python
-requirements = requirements.txt
-install_script = install.sh
-managed_services = 
-	octoapp
-
-[announcements]
-subscriptions = 
-	octoapp.
-
 [update_manager Klipper-Adaptive-Meshing-Purging]
 type = git_repo
 channel = dev
